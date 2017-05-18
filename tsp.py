@@ -120,6 +120,8 @@ class TSP:
                 self.best_generation = generation
             self.log('GENERATION {0:04d} - AVG: {1:.3f} - MIN: {2:.3f}'.format(
                      generation, self.avg_dist(), min_dist))
+            if generation % 50 == 1:
+                self.save_best_solution()
         self.log('-' * 120)
         self.log('MIN DIST: {0:.3f} IN GENERATION {1}'.format(
                  self.best_min_dist, self.best_generation))
