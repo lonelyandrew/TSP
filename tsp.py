@@ -2,44 +2,58 @@
 
 import numpy as np
 import logging
+import itchat
+import os
+import datetime
 
 
 class TSP:
     '''An implementaion of MO-GA to solve TSP problem.
     '''
 
-    def __init__(self, turns):
+    def __init__(self, generations, population):
         '''Init with data and several hyper-parameters.
 
         Args:
-            turns: How many turns you wanna perform before stopping.
+            generations: How many generations you wanna evolve.
+            population: The size of the population.
         '''
+        self.config_itchat()
         self.config_logger()
-        logging.info('*' * 120)
-        logging.info('-*- TSP INITIALIZATION STARTED -*-')
+        self.log('*' * 120)
+        self.log('-*- TSP INITIALIZATION STARTED -*-')
         self.data = np.loadtxt('ja9847.txt', skiprows=7, usecols=(1, 2))
         self.dist = np.load('dist.npy')
         self.m = len(self.data)
-        self.n = 100
-        self.pm = 0.3
-        self.q = 50
-        self.turns = turns
+        self.n = population
+        self.pm = 0.1
+        self.q = round(population / 2)
+        self.generations = generations
         self.population = np.zeros([self.n, self.m], dtype=int)
         self.best_min_dist = float('inf')
         self.best_solution = None
-        self.best_turn = -1
-        logging.info('CITIES:%d', self.m)
-        logging.info('POPULATION:%d', self.n)
-        logging.info('PERMUTATION PROBABILITY:%.2f', self.pm)
-        logging.info('ELITE COUNT:%d', self.q)
-        logging.info('TURNS:%d', self.turns)
-        logging.info('-*- TSP INITIALIZATION FINISHED -*-\n')
+        self.best_generation = -1
+        self.log('CITIES:{}'.format(self.m))
+        self.log('POPULATION:{}'.format(self.n))
+        self.log('PERMUTATION PROBABILITY:{:.2f}'.format(self.pm))
+        self.log('ELITE COUNT:{}'.format(self.q))
+        self.log('GENERATION:{}'.format(self.generations))
+        self.init_population()
+        self.log('-*- TSP INITIALIZATION FINISHED -*-\n')
+
+    def config_itchat(self):
+        itchat.auto_login(enableCmdQR=2, hotReload=True)
+
+    def log(self, message):
+        logging.info(message)
+        itchat.send('{0}-{1}'.format(datetime.datetime.now(),
+                                     message), toUserName='filehelper')
 
     def config_logger(self):
         '''Config the logger.
         '''
         logging.basicConfig(filename='tsp.log',
-                            level=logging.DEBUG,
+                            level=logging.INFO,
                             format='%(asctime)s-%(levelname)s-%(message)s')
         formatter = logging.Formatter(
             '%(asctime)s-%(levelname)s-%(message)s')
@@ -47,6 +61,20 @@ class TSP:
         console.setLevel(logging.DEBUG)
         console.setFormatter(formatter)
         logging.getLogger('').addHandler(console)
+
+    def save_best_solution(self):
+        if os.path.isfile('min_dist.txt'):
+            min_dist = np.loadtxt('min_dist.txt')
+            if min_dist > self.best_min_dist:
+                np.savetxt('min_dist.txt', [self.best_min_dist], '%.3f')
+                np.save('min.npy', self.best_solution)
+                self.log('HISTORY MIN VALUE REFRESHED TO {:.3f}'.format(
+                    self.best_min_dist))
+        else:
+            np.savetxt('min_dist.txt', [self.best_min_dist], '%.3f')
+            np.save('min.npy', self.best_solution)
+            self.log('HISTORY MIN VALUE REFRESHED TO {:.3f}'.format(
+                self.best_min_dist))
 
     def align(self, x):
         '''Align a individual to make it start from 1.
@@ -62,14 +90,24 @@ class TSP:
         '''
         for i in range(self.n):
             self.population[i, :] = np.random.permutation(self.m)
-        self.population = np.apply_along_axis(self.align, 1, self.population)
+        # self.population = np.apply_along_axis(self.align, 1, self.population)
+        if os.path.isfile('min.npy') and os.path.isfile('min_dist.txt'):
+            history_min = np.load('min.npy')
+            history_min_dist = np.loadtxt('min_dist.txt')
+            replace_count = round(0.3 * self.n)
+            self.population[:replace_count] = history_min
+            self.log('INHERIT {0} INDIVIDUALS WITH {1}'.format(
+                replace_count, history_min_dist))
+        else:
+            self.log('INIT FROM PURE RANDOM STATE')
+
         self.population = self.sort(self.population)
 
     def evolve(self):
         '''Evolve the population.
         '''
-        logging.info('-*- EVOLUTION STARTED -*- ')
-        for turn in range(self.turns):
+        self.log('-*- EVOLUTION STARTED -*- ')
+        for generation in range(self.generations):
             offsprings = np.array([self.crossover(p1, p2)
                                    for p1, p2 in self.pair_parents()])
             offsprings = np.reshape(offsprings, (4 * len(offsprings), self.m))
@@ -79,14 +117,15 @@ class TSP:
             if self.best_min_dist > min_dist:
                 self.best_min_dist = min_dist
                 self.best_solution = self.population[min_index]
-                self.best_turn = turn
-            logging.info('TURN %d - AVG: %.3f - MIN: %.3f',
-                         turn, self.avg_dist(), min_dist)
-        logging.info('-' * 120)
-        logging.info('MIN DIST: %.3f IN TURN %d',
-                     self.best_min_dist, self.best_turn)
-        logging.info('-*- EVOLUTION FINISHED -*- ')
-        logging.info('*' * 120)
+                self.best_generation = generation
+            self.log('GENERATION {0:04d} - AVG: {1:.3f} - MIN: {2:.3f}'.format(
+                     generation, self.avg_dist(), min_dist))
+        self.log('-' * 120)
+        self.log('MIN DIST: {0:.3f} IN GENERATION {1}'.format(
+                 self.best_min_dist, self.best_generation))
+        self.save_best_solution()
+        self.log('-*- EVOLUTION FINISHED -*- ')
+        self.log('*' * 120)
 
     def find_min(self):
         '''Find the minimum path distance and its index among current
@@ -244,6 +283,5 @@ class TSP:
 
 
 if __name__ == '__main__':
-    tsp = TSP(5)
-    tsp.init_population()
+    tsp = TSP(generations=5, population=10)
     tsp.evolve()
