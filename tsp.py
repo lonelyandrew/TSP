@@ -33,6 +33,8 @@ class TSP:
         self.best_min_dist = float('inf')
         self.best_solution = None
         self.best_generation = -1
+        if __debug__:
+            self.log('MODE:DEBUG')
         self.log('CITIES:{}'.format(self.m))
         self.log('POPULATION:{}'.format(self.n))
         self.log('PERMUTATION PROBABILITY:{:.2f}'.format(self.pm))
@@ -42,7 +44,10 @@ class TSP:
         self.log('-*- TSP INITIALIZATION FINISHED -*-\n')
 
     def config_itchat(self):
-        itchat.auto_login(enableCmdQR=2, hotReload=True)
+        if __debug__:
+            itchat.auto_login(enableCmdQR=2, hotReload=True)
+        else:
+            itchat.auto_login(hotReload=True)
 
     def log(self, message):
         logging.info(message)
@@ -285,5 +290,9 @@ class TSP:
 
 
 if __name__ == '__main__':
-    tsp = TSP(generations=5, population=10)
-    tsp.evolve()
+    if __debug__:
+        tsp = TSP(generations=5, population=10)
+        tsp.evolve()
+    else:
+        tsp = TSP(generations=5000, population=100)
+        tsp.evolve()
