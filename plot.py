@@ -18,6 +18,10 @@ def plot_sln_dym(sln):
         plt.pause(0.05)
 
 
+def plot_sln(sln):
+    pass
+
+
 if __name__ == '__main__':
     e = np.load('init_int_200.npy')
     plot_sln_dym(e[0])

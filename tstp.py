@@ -137,17 +137,7 @@ class TSTP:
         selecting = self.population[0:self.q]
         selecting = np.vstack((selecting, offsprings))
         selecting = self.sort(selecting)
-        fits = self.fitness(len(selecting))
-        sum_fits = sum(fits)
-        p = [f / sum_fits for f in fits]
-        cul_p = np.array([sum(p[:i]) for i in range(len(selecting))])
-        new_population = []
-        for i in range(self.n):
-            prob = np.random.random_sample()
-            choice = np.argmax(cul_p > prob)
-            new_population.append(selecting[choice])
-        new_population = np.array(new_population)
-        self.population = self.sort(new_population)
+        self.population = selecting[:self.n]
 
     def fitness(self, length):
         beta = 0.2
@@ -174,24 +164,16 @@ class TSTP:
             yield np.argmax(cul_p > prob1), np.argmax(cul_p > prob2)
 
     def crossover(self, x_i, y_i, pts):
-        x, y = self.population[x_i], self.population[y_i]
         pt1, pt2 = pts
-        k = self.m - pt2
-        c1, c2 = np.roll(x, k), np.roll(y, k)
-        middle_1, middle_2 = x[pt1:pt2], y[pt1:pt2]
-        c1_prime = np.array([i for i in c1 if i not in middle_2])
-        c2_prime = np.array([i for i in c2 if i not in middle_1])
-        c1 = np.concatenate((c1_prime[k:], middle_2, c1_prime[:k]))
-        c2 = np.concatenate((c2_prime[k:], middle_1, c2_prime[:k]))
-        c3, c4 = np.array(x), np.array(y)
-        c3[:pt2 - pt1], c4[:pt2 - pt1] = middle_1, middle_2
-        c3[pt2 - pt1:pt2], c4[pt2 - pt1:pt2] = x[:pt1], y[:pt1]
-        section3_x, section3_y = c3[pt2:], c4[pt2:]
-        c3 = np.array([i for i in c3 if i not in section3_y])
-        c4 = np.array([i for i in c4 if i not in section3_x])
-        c3 = np.concatenate((c3, section3_y))
-        c4 = np.concatenate((c4, section3_x))
-        return (c1, c2, c3, c4)
+        x, y = self.population[x_i], self.population[y_i]
+        c1, c2 = x[:], y[:]
+        c1[:pt1] = x[np.argsort(y[:pt1])]
+        c2[:pt1] = y[np.argsort(x[:pt1])]
+        c1[pt1:pt2] = x[np.argsort(y[pt1:pt2])+pt1]
+        c2[pt1:pt2] = y[np.argsort(x[pt1:pt2])+pt1]
+        c1[pt2:] = x[np.argsort(y[pt2:])+pt2]
+        c2[pt2:] = y[np.argsort(x[pt2:])+pt2]
+        return c1, c2
 
     def mutation(self, offsprings):
         m_count = round(self.pm * len(offsprings))
@@ -205,5 +187,9 @@ class TSTP:
 
 
 if __name__ == '__main__':
-    tstp = TSTP(20, 300, 0.8, 0.1, 0.5)
+    tstp = TSTP(generations=20,
+                population=500,
+                elite_p=0.8,
+                p_m=0.1,
+                init_p=0.4)
     tstp.evolve()
