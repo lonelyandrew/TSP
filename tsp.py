@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 
-import numpy as np
-import logging
-import itchat
-import os
 import datetime
+import logging
+import os
+
+import itchat
+import numpy as np
 
 
 class TSP:

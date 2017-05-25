@@ -18,7 +18,7 @@ class Preprocessing:
         self.log('-' * 120)
         self.log('PREPROCESSING: FIND {0} ELITES START'.format(n))
         start = datetime.now()
-        init_elites = np.zeros((n, self.m))
+        init_elites = np.zeros((n, self.m), dtype=int)
         for i in range(n):
             source = group[i]
             sln = [source]
@@ -31,7 +31,8 @@ class Preprocessing:
                 whole.remove(next_city)
             log_str = '({0}/{1}) START FROM {2}:{3}'
             self.log(log_str.format(i+1, n, source, self.path_dist(sln)))
-        np.save('elite_{}'.format(n), init_elites)
+            init_elites[i] = sln
+        np.save('init_{}'.format(n), init_elites)
         end = datetime.now()
         self.log('TIME SPENDING: {0}'.format(end - start))
         self.log('PREPROCESSING: FIND {0} ELITES FINISHED'.format(n))
@@ -51,7 +52,8 @@ class Preprocessing:
                 sln.append(next_city)
                 whole.remove(next_city)
             self.log('START FROM {0}:{1}'.format(i, self.path_dist(sln)))
-        np.save('elite', init_elites)
+            init_elites[i] = sln
+        np.save('init', init_elites)
         end = datetime.now()
         self.log('TIME SPENDING: {0}'.format(end - start))
         self.log('PREPROCESSING: FIND ALL ELITES FINISHED')
@@ -73,7 +75,7 @@ class Preprocessing:
     def path_dist(self, sln):
         dist_sum = 0
         for i in range(self.m - 1):
-            dist_sum += self.dist[i][i + 1]
+            dist_sum += self.dist[sln[i], sln[i + 1]]
         else:
             dist_sum += self.dist[sln[-1]][sln[0]]
         return dist_sum
@@ -81,5 +83,6 @@ class Preprocessing:
 
 if __name__ == '__main__':
     pre = Preprocessing()
-    # pre.find_all_elites()
-    pre.find_elites(5000)
+    pre.find_elites(200)
+    # e = np.load('init_200.npy')
+    # print(e)
