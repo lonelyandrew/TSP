@@ -11,14 +11,17 @@ class TSP:
     '''An implementaion of MO-GA to solve TSP problem.
     '''
 
-    def __init__(self, generations, population):
+    def __init__(self, generations, population, wechat_log=False):
         '''Init with data and several hyper-parameters.
 
         Args:
             generations: How many generations you wanna evolve.
             population: The size of the population.
+            wechat_log (optional): Whether log to wechat or not. Default False.
         '''
-        self.config_itchat()
+        self.wechat_log = wechat_log
+        if wechat_log:
+            self.config_itchat()
         self.config_logger()
         self.log('*' * 120)
         self.log('-*- TSP INITIALIZATION STARTED -*-')
@@ -26,8 +29,8 @@ class TSP:
         self.dist = np.load('dist.npy')
         self.m = len(self.data)
         self.n = population
-        self.pm = 0.1
-        self.q = round(population / 2)
+        self.pm = 0.6
+        self.q = round(population * 0.8)
         self.generations = generations
         self.population = np.zeros([self.n, self.m], dtype=int)
         self.best_min_dist = float('inf')
@@ -40,19 +43,27 @@ class TSP:
         self.log('PERMUTATION PROBABILITY:{:.2f}'.format(self.pm))
         self.log('ELITE COUNT:{}'.format(self.q))
         self.log('GENERATION:{}'.format(self.generations))
-        self.init_population()
+        self.init_population(0.4)
         self.log('-*- TSP INITIALIZATION FINISHED -*-\n')
 
     def config_itchat(self):
+        '''Configurate wechat log options.
+        '''
         if __debug__:
             itchat.auto_login(enableCmdQR=2, hotReload=True)
         else:
             itchat.auto_login(hotReload=True)
 
     def log(self, message):
+        '''Log message to loggers those have been setted-up.
+
+        Args:
+            message: The message to log.
+        '''
         logging.info(message)
-        itchat.send('{0}-{1}'.format(datetime.datetime.now(),
-                                     message), toUserName='filehelper')
+        if self.wechat_log:
+            itchat.send('{0}-{1}'.format(datetime.datetime.now(),
+                                         message), toUserName='filehelper')
 
     def config_logger(self):
         '''Config the logger.
@@ -90,22 +101,22 @@ class TSP:
         i, = np.where(x == 0)
         return np.roll(x, -i)
 
-    def init_population(self):
+    def init_population(self, p_inherit):
         '''Initialize the population.
+
+        Args: The proportion of the inherited in the population.
         '''
         for i in range(self.n):
             self.population[i, :] = np.random.permutation(self.m)
-        # self.population = np.apply_along_axis(self.align, 1, self.population)
         if os.path.isfile('min.npy') and os.path.isfile('min_dist.txt'):
             history_min = np.load('min.npy')
             history_min_dist = np.loadtxt('min_dist.txt')
-            replace_count = round(0.3 * self.n)
+            replace_count = round(p_inherit * self.n)
             self.population[:replace_count] = history_min
             self.log('INHERIT {0} INDIVIDUALS WITH {1}'.format(
                 replace_count, history_min_dist))
         else:
             self.log('INIT FROM PURE RANDOM STATE')
-
         self.population = self.sort(self.population)
 
     def evolve(self):
@@ -113,15 +124,18 @@ class TSP:
         '''
         self.log('-*- EVOLUTION STARTED -*- ')
         for generation in range(self.generations):
-            offsprings = np.array([self.crossover(p1, p2)
-                                   for p1, p2 in self.pair_parents()])
+            pts = self.choose_crossover_pt()
+            offsprings = []
+            offsprings = [self.crossover(p1, p2, pts)
+                          for p1, p2 in self.pair_parents()]
+            offsprings = np.array(offsprings)
             offsprings = np.reshape(offsprings, (4 * len(offsprings), self.m))
             offsprings = self.mutation(offsprings)
             self.select(offsprings)
-            min_dist, min_index = self.find_min()
+            min_dist = self.path_dist(self.population[0])
             if self.best_min_dist > min_dist:
                 self.best_min_dist = min_dist
-                self.best_solution = self.population[min_index]
+                self.best_solution = self.population[0]
                 self.best_generation = generation
             self.log('GENERATION {0:04d} - AVG: {1:.3f} - MIN: {2:.3f}'.format(
                      generation, self.avg_dist(), min_dist))
@@ -133,13 +147,6 @@ class TSP:
         self.save_best_solution()
         self.log('-*- EVOLUTION FINISHED -*- ')
         self.log('*' * 120)
-
-    def find_min(self):
-        '''Find the minimum path distance and its index among current
-           population.
-        '''
-        dist_list = np.array([self.path_dist(v) for v in self.population])
-        return np.min(dist_list), np.argmin(dist_list)
 
     def avg_dist(self):
         '''Calculate the average path distance of the current
@@ -170,17 +177,21 @@ class TSP:
             prob = np.random.random_sample()
             choice = np.argmax(cul_p > prob)
             new_population.append(selecting[choice])
-        self.population = new_population
+        self.population = self.sort(new_population)
 
     def sort(self, population):
         '''Sort the whole population depending on path distance.
 
         Args:
             population: The population which is going to be sorted.
+
+        Returns:
+            Return sorted population.
         '''
-        dist_list = np.array([self.path_dist(v) for v in population])
-        population = population[dist_list.argsort()]
-        return population
+        population = np.array(population)
+        dist_list = np.array([self.path_dist(v)
+                              for v in population])
+        return population[dist_list.argsort()]
 
     def fitness(self, length):
         '''Calculate the fitness value of a individual.
@@ -211,7 +222,16 @@ class TSP:
         dist_sum = 0
         for i in range(self.m - 1):
             dist_sum += self.dist[v[i], v[i + 1]]
+        dist_sum += self.dist[v[-1], v[0]]
         return dist_sum
+
+    def choose_crossover_pt(self):
+        '''Choose the position to perform crossover operation.
+        '''
+        pt1, pt2 = (0, 0)
+        while pt1 == pt2:
+            pt1, pt2 = sorted(np.random.randint(1, self.m - 1, size=2))
+        return pt1, pt2
 
     def pair_parents(self):
         '''Select pairs of parents among the population.
@@ -227,20 +247,19 @@ class TSP:
             prob1, prob2 = np.random.random_sample(2)
             yield np.argmax(cul_p > prob1), np.argmax(cul_p > prob2)
 
-    def crossover(self, x_i, y_i):
+    def crossover(self, x_i, y_i, pts):
         '''Perform a crossover operation on two parents to produce four offsprings.
 
         Args:
             x_i: The first parent's index.
             y_i: The second parent's index.
+            pts: A tuple contain two points to perform crossover operation.
 
         Returns:
             Return a list consists of four generated offsprings.
         '''
         x, y = self.population[x_i], self.population[y_i]
-        pt1, pt2 = (0, 0)
-        while pt1 == pt2:
-            pt1, pt2 = sorted(np.random.randint(1, self.m - 1, size=2))
+        pt1, pt2 = pts
         k = self.m - pt2
         c1, c2 = np.roll(x, k), np.roll(y, k)
         middle_1, middle_2 = x[pt1:pt2], y[pt1:pt2]
@@ -266,11 +285,11 @@ class TSP:
         '''
         m_count = round(self.pm * len(offsprings))
         m_offsprings = np.random.choice(np.arange(len(offsprings)), m_count)
-        for o in offsprings[m_offsprings]:
-            pt1, pt2 = (0, 0)
-            while pt1 == pt2:
-                pt1, pt2 = sorted(np.random.randint(1, self.m - 1, size=2))
-            o[pt1:pt2] = o[pt2 - 1:pt1 - 1:-1]
+        pt1, pt2 = (0, 0)
+        while pt1 == pt2:
+            pt1, pt2 = sorted(np.random.randint(1, self.m - 2, size=2))
+        for i in m_offsprings:
+            offsprings[i][pt1:pt2] = offsprings[i][pt2 - 1:pt1 - 1:-1]
         return offsprings
 
     def cal_dist():
@@ -291,8 +310,8 @@ class TSP:
 
 if __name__ == '__main__':
     if __debug__:
-        tsp = TSP(generations=5, population=10)
+        tsp = TSP(generations=20, population=120)
         tsp.evolve()
     else:
-        tsp = TSP(generations=5000, population=100)
+        tsp = TSP(generations=50000, population=500, wechat_log=True)
         tsp.evolve()
