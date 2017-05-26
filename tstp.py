@@ -102,12 +102,12 @@ class TSTP:
     def evolve(self):
         self.log('-*- EVOLUTION STARTED -*- ')
         for generation in range(self.generations):
-            pts = self.choose_crossover_pt()
+            # pts = self.choose_crossover_pt()
             self.log(
                 'GENERATION {0} - PTS {1[0]} & {1[1]}'.format(generation, pts))
             offsprings = []
             for p1, p2 in self.pair_parents():
-                new_offsprings = self.crossover(p1, p2, pts)
+                new_offsprings = self.crossover(p1, p2)
                 offsprings += new_offsprings
             offsprings = np.array(offsprings)
             self.log('GENERATION {0} - CROSSOVER DONE'.format(generation))
@@ -163,17 +163,39 @@ class TSTP:
             prob1, prob2 = np.random.random_sample(2)
             yield np.argmax(cul_p > prob1), np.argmax(cul_p > prob2)
 
-    def crossover(self, x_i, y_i, pts):
-        pt1, pt2 = pts
+    def crossover(self, x_i, y_i):
         x, y = self.population[x_i], self.population[y_i]
-        c1, c2 = x[:], y[:]
-        c1[:pt1] = x[np.argsort(y[:pt1])]
-        c2[:pt1] = y[np.argsort(x[:pt1])]
-        c1[pt1:pt2] = x[np.argsort(y[pt1:pt2])+pt1]
-        c2[pt1:pt2] = y[np.argsort(x[pt1:pt2])+pt1]
-        c1[pt2:] = x[np.argsort(y[pt2:])+pt2]
-        c2[pt2:] = y[np.argsort(x[pt2:])+pt2]
-        return c1, c2
+        slnx = self.adj_matrix(x)
+        slny = self.adj_matrix(y)
+        union = self.union_adj_matrix(slnx, slny)
+        new_sln = []
+        city_choice = np.random.randint(0, 9846)
+        while len(new_sln) < self.m:
+            print(len(new_sln))
+            new_sln.append(city_choice)
+            shortest_sets = []
+            shortest_length = self.m
+            for i, s in enumerate(union):
+                if i not in new_sln:
+                    s.discard(city_choice)
+                    if len(s) == shortest_length:
+                        shortest_sets.append(s)
+                    elif len(s) < shortest_length:
+                        shortest_sets = [s]
+            city_choice = np.random.choice(shortest_sets)
+        return new_sln
+
+        # return c1, c2
+
+    def adj_matrix(self, sln):
+        m = np.zeros((self.m, 2), dtype=int)
+        for i, city in enumerate(sln):
+            m[city][0] = sln[i-1]
+            m[city][1] = sln[i+1] if i != self.m - 1 else sln[0]
+        return m
+
+    def union_adj_matrix(self, sln1, sln2):
+        return [set(sln1[i]+sln2[i]) for i in range(self.m)]
 
     def mutation(self, offsprings):
         m_count = round(self.pm * len(offsprings))
@@ -187,9 +209,12 @@ class TSTP:
 
 
 if __name__ == '__main__':
-    tstp = TSTP(generations=20,
-                population=500,
+    tstp = TSTP(generations=2,
+                population=5,
                 elite_p=0.8,
                 p_m=0.1,
                 init_p=0.4)
-    tstp.evolve()
+    # tstp.evolve()
+    e = np.load('init_int_200.npy')
+    tstp.crossover(0, 1)
+    # print(u)
